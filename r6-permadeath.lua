@@ -17,7 +17,7 @@ local dummyCharacter = game:GetObjects("rbxassetid://6843243348")[1]
 local flingStatus = {
 	enabled = false,
 	positionModified = false,
-	currentPartPosition = Vector3.zero,
+	currentPosition = Vector3.zero,
 }
 -- functions
 local function checkValue(value, defaultValue)
@@ -111,7 +111,7 @@ local reanimationAPI do
 				(typeof(position) == "Vector3" and position) or
 				(typeof(position) == "CFrame" and position.Position)
 			)
-			flingStatus.currentPartPosition = position
+			flingStatus.currentPosition = position
 		end
 	end
 
@@ -239,13 +239,16 @@ if configuration.UseBuiltinNetless then
 			if (not object or not cloneObj) then continue end
 
 			sethiddenproperty(object, "NetworkIsSleeping", false)
-			if (object == rootPart and flingStatus.enabled) then return end
+			if (object == rootPart and flingStatus.enabled) then continue end
+			object:ApplyImpulse(configuration.Velocity)
+			object:ApplyAngularImpulse(Vector3.zero)
 			object.Velocity, object.RotVelocity = configuration.Velocity, Vector3.zero
 			if (
 				not isnetworkowner(object) and
 				(fRootPart.Position - object.Position).Magnitude <= 20
 			) then -- tries to reclaim the part
 				object.CFrame = cloneObj.CFrame
+				sethiddenproperty(object, "NetworkIsSleeping", true)
 			end
 		end
 	end))
@@ -260,8 +263,8 @@ table.insert(_G.Connections, runService.Heartbeat:Connect(function()
 	end
 	if flingStatus.enabled then
 		local vX, vY, vZ = math.random(-1, 1), math.random(-1, 1), math.random(-1, 1)
-		rootPart.Position = (flingStatus.positionModified and flingStatus.currentPartPosition or fRootPart.Position)
-		rootPart.RotVelocity = Vector3.new(vX, vY, vZ) * 1e5
+		rootPart.Position = (flingStatus.positionModified and flingStatus.currentPosition or fRootPart.Position)
+		rootPart.RotVelocity, rootPart.Velocity = (Vector3.new(vX, vY, vZ) * 1e7), Vector3.zero
 	end
 	if fRootPart.Position.Y <= workspace.FallenPartsDestroyHeight then
 		return resetBindable:Fire()
