@@ -68,8 +68,8 @@ end
 
 local function toggleRootPart(value)
 	local alignPos, alignOrt =
-		rootPart:FindFirstChildWhichIsA("AlignPosition"),
-		rootPart:FindFirstChildWhichIsA("AlignOrientation")
+		fRootPart:FindFirstChildWhichIsA("AlignPosition"),
+		fRootPart:FindFirstChildWhichIsA("AlignOrientation")
 	alignPos.Enabled, alignOrt.Enabled = value, value
 
 	rootPart.RotVelocity = Vector3.zero
