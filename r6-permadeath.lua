@@ -53,7 +53,7 @@ local function weldPart(part, parent, position, orientation)
 	alignPos.RigidityEnabled, alignOrt.RigidityEnabled = false, false
 	alignPos.Attachment0, alignOrt.Attachment0 = _attachment, _attachment
 	alignPos.Attachment1, alignOrt.Attachment1 = attachment, attachment
-	alignPos.Parent, alignOrt.Parent = part, part
+	alignPos.Parent, alignOrt.Parent = parent, parent
 	attachment.Parent, _attachment.Parent = parent, part
 end
 
