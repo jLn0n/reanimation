@@ -1,15 +1,15 @@
 -- services
-local inputService = game:GetService("UserInputService")
 local players = game:GetService("Players")
 local runService = game:GetService("RunService")
 local starterGui = game:GetService("StarterGui")
 -- objects
 local player = players.LocalPlayer
+local plrScripts = player.PlayerScripts
 local character = player.Character
 local humanoid, rootPart =
 	character:FindFirstChildWhichIsA("Humanoid"),
 	character:FindFirstChild("HumanoidRootPart")
-local fRootPart
+local fRootPart, fHumanoid
 local resetBindable = Instance.new("BindableEvent")
 -- variables
 _G.Connections = (_G.Connections or table.create(16))
@@ -73,6 +73,15 @@ local function toggleRootPart(value)
 	alignPos.Enabled, alignOrt.Enabled = value, value
 
 	rootPart.RotVelocity = Vector3.zero
+end
+
+local function setCharacterTo(newCharacter) -- dumb hacks lmao
+	shared.reanimationCharacter = newCharacter
+
+	firesignal(player.Changed, "Character")
+	firesignal(player:GetPropertyChangedSignal("Character"))
+	firesignal(player.CharacterAdded, newCharacter)
+	task.defer(firesignal, player.CharacterAppearanceLoaded, newCharacter)
 end
 
 local function killReanimation()
@@ -149,8 +158,7 @@ do -- reanimate initialization
 	starterGui.ResetPlayerGuiOnSpawn = oldResetPlayerGuiOnSpawnValue
 	task.wait(players.RespawnTime + .05)
 	dummyCharacter.Parent = workspace
-	shared.reanimationCharacter = dummyCharacter
-	fRootPart = dummyCharacter.HumanoidRootPart
+	fRootPart, fHumanoid = dummyCharacter.HumanoidRootPart, dummyCharacter.Humanoid
 
 	for _, object in ipairs(character:GetChildren()) do
 		local objPart = getBasePart(object)
@@ -191,20 +199,34 @@ do -- reanimate initialization
 	character:BreakJoints()
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
 	dummyCharacter:PivotTo(oldCharacterPos)
-	rootPart.Anchored = false
 	toggleRootPart(not flingStatus.enabled)
+	setCharacterTo(dummyCharacter)
+	rootPart.Anchored = false
 
 	if not shared.reanimationHooksInitialized then
+		shared.reanimationHooksInitialized = true
 		local __index
+
 		__index = hookmetamethod(game, "__index", newcclosure(function(self, index)
-			if checkcaller() and (shared.reanimationCharacter and shared.reanimationCharacter:IsDescendantOf(workspace)) then
-				if self == player and (index == "Character" or index == "character") then
-					return shared.reanimationCharacter
+			local scriptCaller = getcallingscript()
+
+			if
+				(scriptCaller and (scriptCaller:IsA("CoreScript") or scriptCaller:IsDescendantOf(plrScripts))) or
+				checkcaller()
+			then
+				if (shared.reanimationCharacter and shared.reanimationCharacter:IsDescendantOf(workspace)) then
+					if
+						self == player and
+						(index == "Character" or index == "character")
+					then
+						return shared.reanimationCharacter
+					elseif self == fHumanoid and (index == "MoveDirection") then
+						return __index(humanoid, index)
+					end
 				end
 			end
 			return __index(self, index)
 		end))
-		shared.reanimationHooksInitialized = true
 	end
 
 	table.insert(_G.Connections, player.CharacterRemoving:Connect(killReanimation))
@@ -243,10 +265,7 @@ if configuration.UseBuiltinNetless then
 			object:ApplyImpulse(configuration.Velocity)
 			object:ApplyAngularImpulse(Vector3.zero)
 			object.Velocity, object.RotVelocity = configuration.Velocity, Vector3.zero
-			if (
-				not isnetworkowner(object) and
-				(fRootPart.Position - object.Position).Magnitude <= 20
-			) then -- tries to reclaim the part
+			if not isnetworkowner(object) and ((fRootPart.Position - object.Position).Magnitude < 2.5) then -- tries to reclaim the part
 				object.CFrame = cloneObj.CFrame
 				sethiddenproperty(object, "NetworkIsSleeping", true)
 			end
@@ -257,15 +276,7 @@ end
 table.insert(_G.Connections, runService.Heartbeat:Connect(function()
 	workspace.CurrentCamera.CameraSubject = dummyCharacter.Humanoid
 	humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-	dummyCharacter.Humanoid:Move(humanoid.MoveDirection)
-	if inputService:IsKeyDown(Enum.KeyCode.Space) and not inputService:GetFocusedTextBox() then
-		dummyCharacter.Humanoid.Jump = true
-	end
-	if flingStatus.enabled then
-		local vX, vY, vZ = math.random(-1, 1), math.random(-1, 1), math.random(-1, 1)
-		rootPart.Position = (flingStatus.positionModified and flingStatus.currentPosition or fRootPart.Position)
-		rootPart.RotVelocity, rootPart.Velocity = (Vector3.new(vX, vY, vZ) * 1e7), Vector3.zero
-	end
+	fHumanoid:Move(humanoid.MoveDirection)
 	if fRootPart.Position.Y <= workspace.FallenPartsDestroyHeight then
 		return resetBindable:Fire()
 	end
@@ -275,6 +286,20 @@ table.insert(_G.Connections, runService.Heartbeat:Connect(function()
 		if not object then continue end
 		object.LocalTransparencyModifier = dummyCharacter.Head.LocalTransparencyModifier
 	end
+end))
+
+table.insert(_G.Connections, runService.Stepped:Connect(function() -- fix this shit
+	if not flingStatus.enabled then return end
+	local vX, vY, vZ = math.random(-1, 1), math.random(-1, 1), math.random(-1, 1)
+	local rootPartPos, flingDirection =
+		(flingStatus.positionModified and flingStatus.currentPosition or fRootPart.Position),
+		Vector3.new(vX, vY, vZ)
+	local flingVel = (flingDirection * 1e7)
+
+	rootPart:ApplyImpulse(flingDirection)
+	rootPart:ApplyAngularImpulse(flingVel)
+	rootPart.Velocity, rootPart.RotVelocity = flingDirection, flingVel
+	rootPart.Position = rootPartPos
 end))
 
 table.insert(_G.Connections, runService.Stepped:Connect(function()
