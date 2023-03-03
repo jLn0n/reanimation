@@ -1,6 +1,7 @@
 # reanimation
 
 reanimation script becus bored
+this repo is now archived because of recent changes of roblox
 
 ## Script
 
